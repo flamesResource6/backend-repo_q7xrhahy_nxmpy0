@@ -1,48 +1,61 @@
 """
-Database Schemas
+Database Schemas for Diabetes Health Management App
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
+Each Pydantic model maps to a MongoDB collection whose name is the lowercase
+of the class name (e.g., GlucoseReading -> "glucosereading").
 
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+These schemas are used for validating request bodies before storing them.
 """
-
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
-from typing import Optional
+from datetime import datetime
 
-# Example schemas (replace with your own):
+# Core domain schemas
 
-class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+class GlucoseReading(BaseModel):
+    timestamp: datetime = Field(..., description="When the reading was taken (ISO8601)")
+    value_mgdl: float = Field(..., ge=20, le=600, description="Glucose value in mg/dL")
+    mode: Literal["manual", "cgm"] = Field("manual", description="Reading source")
+    note: Optional[str] = Field(None, description="Optional note about context")
+    meal_context: Optional[Literal["pre", "post", "none"]] = Field(
+        None, description="Relation to a meal if known"
+    )
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+class Meal(BaseModel):
+    timestamp: datetime = Field(..., description="When the meal was consumed")
+    name: str = Field(..., description="Short name, e.g., 'Dal Khichdi, 2 bowls'")
+    carbs_g: Optional[float] = Field(None, ge=0)
+    protein_g: Optional[float] = Field(None, ge=0)
+    fat_g: Optional[float] = Field(None, ge=0)
+    calories: Optional[float] = Field(None, ge=0)
+    note: Optional[str] = None
 
-# Add your own schemas here:
-# --------------------------------------------------
+class MedicationLog(BaseModel):
+    timestamp: datetime = Field(..., description="When the dose was taken")
+    type: Literal["oral", "insulin", "mixed"] = Field(...)
+    brand: Optional[str] = None
+    dose_units: Optional[float] = Field(None, ge=0, description="Units for insulin or mg for oral")
+    frequency: Optional[str] = Field(None, description="e.g., once daily, with meals")
+    note: Optional[str] = None
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class Activity(BaseModel):
+    timestamp: datetime = Field(...)
+    kind: Literal["walk", "run", "cycle", "gym", "other"] = Field("walk")
+    duration_min: float = Field(..., ge=0)
+    calories: Optional[float] = Field(None, ge=0)
+    note: Optional[str] = None
+
+class Reminder(BaseModel):
+    label: str
+    time_local: str = Field(..., description="HH:MM 24h format in user's local time")
+    type: Literal["glucose", "meal", "medication", "activity"]
+    enabled: bool = True
+
+# Lightweight request model for insights windows
+class InsightsWindow(BaseModel):
+    days: int = Field(14, ge=1, le=90)
+"""
+# Notes:
+# - Collections will be named: 'glucosereading', 'meal', 'medicationlog', 'activity', 'reminder'
+# - Timestamps are stored as UTC datetimes by database helpers with created_at/updated_at
+"""
